@@ -263,6 +263,7 @@
                 
                 <h3>Micro:bit MakeCode 程式寫法參考：</h3>
                 <p>請使用 <strong>序列埠 (Serial)</strong> 相關積木，不要用藍牙積木。Baud Rate 預設使用 <strong>115200</strong>。</p>
+                <p><strong>注意：</strong>為了讓網頁能區分左右側數據，請參考下方新的程式寫法，按下 A 鍵傳送「L,數值」，按下 B 鍵傳送「R,數值」。</p>
                 <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
 let testMode = 0
 
@@ -271,22 +272,23 @@ serial.redirectToUSB()
 
 input.onButtonPressed(Button.A, function () {
     testMode = 0
-    basic.showString("L")
+    basic.showString("L") // 顯示 L 代表測試左側
 })
 
 input.onButtonPressed(Button.B, function () {
     testMode = 1
-    basic.showString("R")
+    basic.showString("R") // 顯示 R 代表測試右側
 })
 
 basic.forever(function () {
     let accel = input.acceleration(Dimension.Strength)
     
     // 透過 USB 序列埠傳送數據，並記得加上換行符號
+    // 使用 "L,數值" 或 "R,數值" 的格式來區分
     if (testMode == 0) {
-        serial.writeString(accel + ",1000\n")
+        serial.writeString("L," + accel + "\n")
     } else {
-        serial.writeString("1000," + accel + "\n")
+        serial.writeString("R," + accel + "\n")
     }
     basic.pause(200)
 })
@@ -412,19 +414,32 @@ basic.forever(function () {
         }
 
         async function disconnectMicrobit() {
-            keepReading = false;
-            if (reader) {
-                await reader.cancel(); // 停止讀取
-            }
-            if (port) {
-                await port.close(); // 關閉 COM 埠
-            }
-            
-            statusText.innerText = '狀態：已斷開連接 🔴';
-            statusText.style.color = '#7f8c8d';
-            connectBtn.disabled = false;
+            statusText.innerText = '狀態：正在斷開連接...';
+            connectBtn.disabled = true;
             disconnectBtn.disabled = true;
-            isSerialConnected = false;
+
+            keepReading = false;
+            
+            try {
+                if (reader) {
+                    await reader.cancel(); // 停止讀取
+                }
+                if (port) {
+                    await port.close(); // 關閉 COM 埠
+                }
+                statusText.innerText = '狀態：已斷開連接 🔴';
+                statusText.style.color = '#7f8c8d';
+            } catch (error) {
+                console.error("斷開連接時發生錯誤:", error);
+                statusText.innerText = '狀態：斷開連接失敗';
+                statusText.style.color = '#e74c3c';
+            } finally {
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                isSerialConnected = false;
+                port = null;
+                reader = null;
+            }
         }
 
         // 讀取序列埠資料流
@@ -466,15 +481,21 @@ basic.forever(function () {
         function processLine(line) {
             if (!line) return;
             let parts = line.split(',');
-            if (parts.length >= 1) {
-                let val1 = parseFloat(parts[0]);
-                if (!isNaN(val1)) latestDataLeft = val1;
-            }
+            
+            // 新的格式：模式(L/R),數值
             if (parts.length >= 2) {
-                let val2 = parseFloat(parts[1]);
-                if (!isNaN(val2)) latestDataRight = val2;
-            } else if (parts.length === 1) {
-                latestDataRight = latestDataLeft; 
+                let mode = parts[0].trim().toUpperCase();
+                let value = parseFloat(parts[1]);
+
+                if (!isNaN(value)) {
+                    if (mode === 'L') {
+                        latestDataLeft = value;
+                        latestDataRight = 1000; // 右邊設為平靜
+                    } else if (mode === 'R') {
+                        latestDataRight = value;
+                        latestDataLeft = 1000; // 左邊設為平靜
+                    }
+                }
             }
         }
 
