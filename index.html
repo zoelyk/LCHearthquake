@@ -30,9 +30,11 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('image_fa5db5.png');
+            /* 更新副檔名為 .jpg */
+            background-image: url('./image_fa5db5.jpg'); 
             background-size: cover;
             background-position: center;
+            background-repeat: no-repeat;
             opacity: 0.4; /* 透明度設定為 40% */
             z-index: -1; /* 確保背景圖片在所有內容的後方 */
         }
@@ -140,7 +142,6 @@
             color: var(--primary-color);
         }
         
-        /* 紀錄按鈕樣式 */
         .record-btn {
             font-size: 14px;
             padding: 8px 15px;
@@ -168,7 +169,6 @@
             100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
         }
 
-        /* 測量結果顯示區塊 */
         .result-display {
             font-size: 18px;
             font-weight: bold;
@@ -196,7 +196,6 @@
             min-height: 250px;
         }
 
-        /* 房間動畫區域設計 */
         .animation-wrapper {
             margin-top: 15px;
             background: #ffffff;
@@ -222,7 +221,6 @@
             background-color: #F5F5F5;
         }
         
-        /* 響應式設計 */
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -247,7 +245,6 @@
         <h1>地震應變感測系統 (USB 連線版)</h1>
     </header>
 
-    <!-- 主要內容區塊：移除分頁，改為單頁呈現 -->
     <main class="container">
         <div class="controls">
             <button class="btn btn-connect" id="connectBtn">連接 Micro:bit (USB)</button>
@@ -316,7 +313,7 @@
                 labels: Array(maxDataPoints).fill(''),
                 datasets: [{
                     label: label,
-                    data: Array(maxDataPoints).fill(1000), // 預設 1000mg(1G)
+                    data: Array(maxDataPoints).fill(1000), 
                     borderColor: color,
                     backgroundColor: color + '33',
                     borderWidth: 2,
@@ -366,15 +363,11 @@
         let receiveBuffer = "";
         let isSerialConnected = false;
         
-        // 最新收到的感測器原始數據 (基準值約 1000 mg)
         let currentSensorValue = 1000;
-        
-        // 圖表顯示用的數據
         let latestDataLeft = 1000;
         let latestDataRight = 1000;
         let chartUpdateInterval;
 
-        // 測量狀態與歷史紀錄
         let isRecordingLeft = false;
         let isRecordingRight = false;
         let historyLeft = [];
@@ -389,32 +382,26 @@
         const valLeftDisplay = document.getElementById('valLeft');
         const valRightDisplay = document.getElementById('valRight');
 
-        // 計算平均震幅 (偏離 1000 的平均絕對誤差)
         function calculateAmplitude(historyArr) {
             if (historyArr.length === 0) return 0;
             let sum = 0;
             for (let val of historyArr) {
-                sum += Math.abs(val - 1000); // 計算偏離重力基準的幅度
+                sum += Math.abs(val - 1000); 
             }
             return (sum / historyArr.length).toFixed(1);
         }
 
-        // 測量按鈕邏輯 - 左側
         btnRecLeft.addEventListener('click', () => {
             isRecordingLeft = !isRecordingLeft;
             btnRecLeft.textContent = isRecordingLeft ? '🔴 停止測量' : '▶️ 開始測量';
             btnRecLeft.classList.toggle('recording', isRecordingLeft);
             
             if (isRecordingLeft) {
-                // 開始測量
-                historyLeft = []; // 清空紀錄
+                historyLeft = []; 
                 valLeftDisplay.innerText = "測量中...";
                 valLeftDisplay.style.color = "#e74c3c";
-                // 清空圖表畫面讓新數據重新進入
                 chartLeft.data.datasets[0].data = Array(maxDataPoints).fill(1000);
                 chartLeft.update();
-
-                // 互斥：確保右邊停下
                 if (isRecordingRight) {
                     isRecordingRight = false;
                     btnRecRight.textContent = '▶️ 開始測量';
@@ -423,29 +410,23 @@
                     valRightDisplay.style.color = "#2c3e50";
                 }
             } else {
-                // 停止測量，計算並顯示結果
                 let avg = calculateAmplitude(historyLeft);
                 valLeftDisplay.innerText = avg + " mg";
                 valLeftDisplay.style.color = "#2c3e50";
             }
         });
 
-        // 測量按鈕邏輯 - 右側
         btnRecRight.addEventListener('click', () => {
             isRecordingRight = !isRecordingRight;
             btnRecRight.textContent = isRecordingRight ? '🔴 停止測量' : '▶️ 開始測量';
             btnRecRight.classList.toggle('recording', isRecordingRight);
             
             if (isRecordingRight) {
-                // 開始測量
-                historyRight = []; // 清空紀錄
+                historyRight = []; 
                 valRightDisplay.innerText = "測量中...";
                 valRightDisplay.style.color = "#e74c3c";
-                // 清空圖表畫面
                 chartRight.data.datasets[0].data = Array(maxDataPoints).fill(1000);
                 chartRight.update();
-
-                // 互斥：確保左邊停下
                 if (isRecordingLeft) {
                     isRecordingLeft = false;
                     btnRecLeft.textContent = '▶️ 開始測量';
@@ -454,15 +435,12 @@
                     valLeftDisplay.style.color = "#2c3e50";
                 }
             } else {
-                // 停止測量，計算並顯示結果
                 let avg = calculateAmplitude(historyRight);
                 valRightDisplay.innerText = avg + " mg";
                 valRightDisplay.style.color = "#2c3e50";
             }
         });
 
-
-        // USB 連接邏輯
         connectBtn.addEventListener('click', connectMicrobit);
         disconnectBtn.addEventListener('click', disconnectMicrobit);
 
@@ -472,21 +450,16 @@
                     alert('您的瀏覽器不支援 Web Serial API。請確認您使用的是最新版的 Chrome 或 Edge 電腦版。');
                     return;
                 }
-                
                 statusText.innerText = '狀態：請選擇 Micro:bit 裝置...';
-                
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 115200 });
-
                 statusText.innerText = '狀態：已連線 🟢 (請點選下方圖表的開始測量)';
                 statusText.style.color = '#27ae60';
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
                 isSerialConnected = true;
-
                 keepReading = true;
                 readLoop();
-
             } catch (error) {
                 console.error(error);
                 statusText.innerText = '狀態：連接失敗或已取消';
@@ -499,22 +472,15 @@
             statusText.innerText = '狀態：正在斷開連接...';
             connectBtn.disabled = true;
             disconnectBtn.disabled = true;
-
             keepReading = false;
-            
             try {
-                if (reader) {
-                    await reader.cancel(); 
-                }
-                if (port) {
-                    await port.close(); 
-                }
+                if (reader) await reader.cancel(); 
+                if (port) await port.close(); 
                 statusText.innerText = '狀態：已斷開連接 🔴';
                 statusText.style.color = '#7f8c8d';
             } catch (error) {
-                console.error("斷開連接時發生錯誤:", error);
+                console.error(error);
                 statusText.innerText = '狀態：斷開連接失敗';
-                statusText.style.color = '#e74c3c';
             } finally {
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
@@ -529,7 +495,6 @@
                 const textDecoder = new TextDecoderStream();
                 const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
                 reader = textDecoder.readable.getReader();
-
                 try {
                     while (true) {
                         const { value, done } = await reader.read();
@@ -546,73 +511,54 @@
                         }
                     }
                 } catch (error) {
-                    console.error("序列埠讀取錯誤:", error);
+                    console.error(error);
                 } finally {
                     reader.releaseLock();
                 }
             }
         }
 
-        // 強大的容錯字串解析，自動過濾並提取出數字
         function processLine(line) {
             if (!line) return;
             let rawStr = line.replace(/[^0-9.-]/g, '');
             let value = parseFloat(rawStr);
-
-            if (!isNaN(value)) {
-                currentSensorValue = value;
-            }
+            if (!isNaN(value)) currentSensorValue = value;
         }
 
-        // 手動模擬控制變數
         let manualEarthquakeActive = false; 
         
         function updateCharts() {
-            // -- 左側邏輯 --
             if (isRecordingLeft || manualEarthquakeActive) {
                 if (!isSerialConnected && manualEarthquakeActive) {
-                    latestDataLeft = 1000 + (Math.random() - 0.5) * 600; // 模擬數據
+                    latestDataLeft = 1000 + (Math.random() - 0.5) * 600; 
                 } else {
-                    latestDataLeft = currentSensorValue; // USB 真實數據
+                    latestDataLeft = currentSensorValue; 
                 }
-                
                 if (isRecordingLeft) historyLeft.push(latestDataLeft);
-
                 chartLeft.data.datasets[0].data.push(latestDataLeft);
                 chartLeft.data.datasets[0].data.shift(); 
                 chartLeft.update();
             } else {
-                latestDataLeft = 1000; // 讓動畫平靜
-                // 不執行 chart.update()，讓圖表畫面「凍結」在停止測量的那一刻
+                latestDataLeft = 1000; 
             }
 
-            // -- 右側邏輯 --
             if (isRecordingRight || manualEarthquakeActive) {
                 if (!isSerialConnected && manualEarthquakeActive) {
-                    latestDataRight = 1000 + (Math.random() - 0.5) * 150; // 模擬數據
+                    latestDataRight = 1000 + (Math.random() - 0.5) * 150; 
                 } else {
-                    latestDataRight = currentSensorValue; // USB 真實數據
+                    latestDataRight = currentSensorValue; 
                 }
-
                 if (isRecordingRight) historyRight.push(latestDataRight);
-
                 chartRight.data.datasets[0].data.push(latestDataRight);
                 chartRight.data.datasets[0].data.shift(); 
                 chartRight.update();
             } else {
-                latestDataRight = 1000; // 讓動畫平靜
-                // 不執行 chart.update()，讓圖表畫面「凍結」
+                latestDataRight = 1000; 
             }
         }
 
-        // 每 200ms 檢查並更新圖表
         chartUpdateInterval = setInterval(updateCharts, 200);
 
-
-        // ==========================================
-        //       室內傢俬物理模擬動畫 (Canvas 2D)
-        // ==========================================
-        
         function createRoomState() {
             return {
                 lampAngle: 0, lampVel: 0,
@@ -632,8 +578,6 @@
 
         document.getElementById('simStopBtn').addEventListener('click', () => {
             manualEarthquakeActive = false;
-            
-            // 如果這時正開啟收錄實體數據，順便把它關掉
             isRecordingLeft = false;
             isRecordingRight = false;
             btnRecLeft.textContent = '▶️ 開始測量';
@@ -642,14 +586,10 @@
             btnRecRight.classList.remove('recording');
             valLeftDisplay.innerText = "-- mg";
             valRightDisplay.innerText = "-- mg";
-
             Object.assign(stateLeft, createRoomState());
             Object.assign(stateRight, createRoomState());
-            currentShakeLeft = 0;
-            currentShakeRight = 0;
             latestDataLeft = 1000;
             latestDataRight = 1000;
-
             chartLeft.data.datasets[0].data = Array(maxDataPoints).fill(1000);
             chartRight.data.datasets[0].data = Array(maxDataPoints).fill(1000);
             chartLeft.update();
@@ -662,7 +602,6 @@
         function updateRoomPhysics(state, shake) {
             state.lampVel += (Math.random() - 0.5) * shake * 0.003 - state.lampAngle * 0.08 - state.lampVel * 0.05;
             state.lampAngle += state.lampVel;
-
             if (shake > 15) {
                 state.wardrobeVel += (shake * 0.00008) * (Math.random() + 0.5);
                 state.tvVel += (shake * 0.00015) * (Math.random() + 0.5); 
@@ -677,24 +616,14 @@
                 state.wardrobeVel *= 0.8;
                 state.tvVel *= 0.8;
             }
-
             state.wardrobeAngle += state.wardrobeVel;
             state.wardrobeVel *= 0.85; 
-            if (state.wardrobeAngle > Math.PI / 2) { 
-                state.wardrobeAngle = Math.PI / 2; 
-                state.wardrobeVel = 0;
-            }
+            if (state.wardrobeAngle > Math.PI / 2) { state.wardrobeAngle = Math.PI / 2; state.wardrobeVel = 0; }
             if (state.wardrobeAngle < 0) { state.wardrobeAngle = 0; state.wardrobeVel = 0; }
-
             state.tvAngle += state.tvVel;
             state.tvVel *= 0.85; 
-            if (state.tvAngle >= Math.PI / 2) {
-                state.tvAngle = Math.PI / 2; 
-                state.tvVel = 0;
-                if (state.tvY < 160) state.tvY += 8; 
-            }
+            if (state.tvAngle >= Math.PI / 2) { state.tvAngle = Math.PI / 2; state.tvVel = 0; if (state.tvY < 160) state.tvY += 8; }
             if (state.tvAngle < 0) { state.tvAngle = 0; state.tvVel = 0; }
-
             if (state.tableX < 150) state.tableX = 150;
             if (state.tableX > 320) state.tableX = 320;
             if (state.chairX < 80) state.chairX = 80;
@@ -703,77 +632,33 @@
 
         function drawRoom(ctx, state, shake) {
             ctx.clearRect(0, 0, 400, 180);
-
             let rX = (Math.random() - 0.5) * shake * 0.01;
             let rY = (Math.random() - 0.5) * shake * 0.01;
-
             ctx.save();
             ctx.translate(rX, rY);
-
-            ctx.fillStyle = '#9E9E9E';
-            ctx.fillRect(0, 160, 400, 20); 
-            ctx.fillStyle = '#BDBDBD';
-            ctx.fillRect(0, 0, 15, 180); 
-
-            ctx.fillStyle = '#BBDEFB';
-            ctx.fillRect(80, 30, 80, 60);
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(80, 30, 80, 60);
+            ctx.fillStyle = '#9E9E9E'; ctx.fillRect(0, 160, 400, 20); 
+            ctx.fillStyle = '#BDBDBD'; ctx.fillRect(0, 0, 15, 180); 
+            ctx.fillStyle = '#BBDEFB'; ctx.fillRect(80, 30, 80, 60);
+            ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 4; ctx.strokeRect(80, 30, 80, 60);
             ctx.beginPath(); ctx.moveTo(120, 30); ctx.lineTo(120, 90); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(80, 60); ctx.lineTo(160, 60); ctx.stroke();
-
-            ctx.save();
-            ctx.translate(200, 0);
-            ctx.rotate(state.lampAngle);
-            ctx.strokeStyle = '#424242';
-            ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 35); ctx.stroke();
-            ctx.fillStyle = '#FFEE58'; 
-            ctx.beginPath(); ctx.arc(0, 35, 6, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#757575'; 
-            ctx.beginPath(); ctx.moveTo(-12, 35); ctx.lineTo(12, 35); ctx.lineTo(5, 20); ctx.lineTo(-5, 20); ctx.fill();
+            ctx.save(); ctx.translate(200, 0); ctx.rotate(state.lampAngle);
+            ctx.strokeStyle = '#424242'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 35); ctx.stroke();
+            ctx.fillStyle = '#FFEE58'; ctx.beginPath(); ctx.arc(0, 35, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#757575'; ctx.beginPath(); ctx.moveTo(-12, 35); ctx.lineTo(12, 35); ctx.lineTo(5, 20); ctx.lineTo(-5, 20); ctx.fill();
             ctx.restore();
-
-            ctx.save();
-            let w_width = 45, w_height = 110;
-            ctx.translate(25 + w_width, 160); 
-            ctx.rotate(state.wardrobeAngle);
-            ctx.fillStyle = '#5D4037'; 
-            ctx.fillRect(-w_width, -w_height, w_width, w_height);
-            ctx.fillStyle = '#4E342E'; 
-            ctx.fillRect(-w_width+4, -w_height+4, w_width/2-6, w_height-8);
+            ctx.save(); let w_width = 45, w_height = 110; ctx.translate(25 + w_width, 160); ctx.rotate(state.wardrobeAngle);
+            ctx.fillStyle = '#5D4037'; ctx.fillRect(-w_width, -w_height, w_width, w_height);
+            ctx.fillStyle = '#4E342E'; ctx.fillRect(-w_width+4, -w_height+4, w_width/2-6, w_height-8);
             ctx.fillRect(-w_width/2+2, -w_height+4, w_width/2-6, w_height-8);
-            ctx.fillStyle = '#D7CCC8'; 
-            ctx.fillRect(-w_width/2-4, -w_height/2, 2, 12);
-            ctx.fillRect(-w_width/2+4, -w_height/2, 2, 12);
+            ctx.fillStyle = '#D7CCC8'; ctx.fillRect(-w_width/2-4, -w_height/2, 2, 12); ctx.fillRect(-w_width/2+4, -w_height/2, 2, 12);
             ctx.restore();
-
-            ctx.fillStyle = '#8D6E63';
-            ctx.fillRect(state.tableX, 125, 80, 6); 
-            ctx.fillRect(state.tableX + 6, 131, 6, 29); 
-            ctx.fillRect(state.tableX + 68, 131, 6, 29); 
-
-            ctx.fillStyle = '#A1887F';
-            ctx.fillRect(state.chairX, 140, 26, 5); 
-            ctx.fillRect(state.chairX + 4, 145, 4, 15); 
-            ctx.fillRect(state.chairX + 18, 145, 4, 15); 
-            ctx.fillRect(state.chairX, 115, 4, 25); 
-
-            ctx.save();
-            ctx.translate(state.tableX + 65, state.tvY); 
-            ctx.rotate(state.tvAngle);
-            ctx.fillStyle = '#212121'; 
-            ctx.fillRect(-45, -35, 45, 30);
-            ctx.fillStyle = '#424242'; 
-            ctx.fillRect(-42, -32, 39, 24);
-            if (state.tvAngle < Math.PI/4) {
-                 ctx.fillStyle = '#757575';
-                 ctx.fillRect(-28, -5, 10, 5); 
-            }
-            ctx.restore();
-
-            ctx.restore(); 
+            ctx.fillStyle = '#8D6E63'; ctx.fillRect(state.tableX, 125, 80, 6); ctx.fillRect(state.tableX + 6, 131, 6, 29); ctx.fillRect(state.tableX + 68, 131, 6, 29); 
+            ctx.fillStyle = '#A1887F'; ctx.fillRect(state.chairX, 140, 26, 5); ctx.fillRect(state.chairX + 4, 145, 4, 15); ctx.fillRect(state.chairX + 18, 145, 4, 15); ctx.fillRect(state.chairX, 115, 4, 25); 
+            ctx.save(); ctx.translate(state.tableX + 65, state.tvY); ctx.rotate(state.tvAngle);
+            ctx.fillStyle = '#212121'; ctx.fillRect(-45, -35, 45, 30); ctx.fillStyle = '#424242'; ctx.fillRect(-42, -32, 39, 24);
+            if (state.tvAngle < Math.PI/4) { ctx.fillStyle = '#757575'; ctx.fillRect(-28, -5, 10, 5); }
+            ctx.restore(); ctx.restore(); 
         }
 
         const canvasL = document.getElementById('animLeft');
@@ -784,21 +669,15 @@
         function renderAnimationLoop() {
             let targetShakeL = Math.abs(latestDataLeft - 1000);
             let targetShakeR = Math.abs(latestDataRight - 1000);
-
             currentShakeLeft += (targetShakeL - currentShakeLeft) * 0.2;
             currentShakeRight += (targetShakeR - currentShakeRight) * 0.2;
-
             updateRoomPhysics(stateLeft, currentShakeLeft);
             updateRoomPhysics(stateRight, currentShakeRight);
-
             drawRoom(ctxAnimL, stateLeft, currentShakeLeft);
             drawRoom(ctxAnimR, stateRight, currentShakeRight);
-            
             requestAnimationFrame(renderAnimationLoop);
         }
-        
         renderAnimationLoop();
-
     </script>
 </body>
 </html>
