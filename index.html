@@ -169,9 +169,24 @@
             100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
         }
 
+        /* 測量結果顯示區塊 */
+        .result-display {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #e8f4f8;
+            border-left: 5px solid #3498db;
+            padding: 10px 15px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 15px;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+        }
+
         .description {
             color: #7f8c8d;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             font-size: 14px;
             line-height: 1.5;
             min-height: 42px;
@@ -251,6 +266,10 @@
                     <button id="btnRecLeft" class="record-btn">▶️ 開始測量</button>
                 </div>
                 <div class="description">模擬一般建築物，無隔震裝置<br>直接放置於震動平台上</div>
+                <div class="result-display" id="resultLeft">
+                    <span>平均震幅：</span>
+                    <span id="valLeft">-- mg</span>
+                </div>
                 <div class="chart-wrapper">
                     <canvas id="chartLeft"></canvas>
                 </div>
@@ -268,6 +287,10 @@
                     <button id="btnRecRight" class="record-btn">▶️ 開始測量</button>
                 </div>
                 <div class="description">模擬隔震建築物<br>裝有彈性與可動支撐的隔震結構</div>
+                <div class="result-display" id="resultRight">
+                    <span>平均震幅：</span>
+                    <span id="valRight">-- mg</span>
+                </div>
                 <div class="chart-wrapper">
                     <canvas id="chartRight"></canvas>
                 </div>
@@ -296,8 +319,9 @@
                     <li>將您的 Micro:bit 透過 <strong>USB 傳輸線</strong> 連接至電腦。</li>
                     <li>點擊本網頁上方的「連接 Micro:bit (USB)」按鈕，選擇對應的 COM 埠。</li>
                     <li>連接成功後，Micro:bit 就會不斷向網頁傳送數據。</li>
-                    <li>點選圖表標題旁邊的 <strong>「▶️ 開始測量」</strong> 按鈕，系統就會將接收到的數據導入該圖表與動畫中。</li>
-                    <li>測試完一般建築物後，點選停止，再換點選隔震結構的「開始測量」繼續測試。</li>
+                    <li>點選圖表標題旁邊的 <strong>「▶️ 開始測量」</strong> 按鈕，圖表開始滾動紀錄，動畫也會啟動。</li>
+                    <li>測量一段時間後，再次點選 <strong>「🔴 停止測量」</strong>，圖表會瞬間凍結，系統會自動幫您計算這段期間內的「平均震幅」。</li>
+                    <li><strong>關於平均震幅：</strong> 系統是以「偏離 1000mg 基準值」的絕對值來計算平均。因此數字愈大，代表震動搖晃愈劇烈！</li>
                 </ol>
                 
                 <h3>Micro:bit MakeCode 極簡版程式寫法：</h3>
@@ -400,9 +424,11 @@ basic.forever(function () {
         let latestDataRight = 1000;
         let chartUpdateInterval;
 
-        // 測量狀態控制變數
+        // 測量狀態與歷史紀錄
         let isRecordingLeft = false;
         let isRecordingRight = false;
+        let historyLeft = [];
+        let historyRight = [];
 
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
@@ -410,31 +436,78 @@ basic.forever(function () {
         
         const btnRecLeft = document.getElementById('btnRecLeft');
         const btnRecRight = document.getElementById('btnRecRight');
+        const valLeftDisplay = document.getElementById('valLeft');
+        const valRightDisplay = document.getElementById('valRight');
 
-        // 測量按鈕邏輯
+        // 計算平均震幅 (偏離 1000 的平均絕對誤差)
+        function calculateAmplitude(historyArr) {
+            if (historyArr.length === 0) return 0;
+            let sum = 0;
+            for (let val of historyArr) {
+                sum += Math.abs(val - 1000); // 計算偏離重力基準的幅度
+            }
+            return (sum / historyArr.length).toFixed(1);
+        }
+
+        // 測量按鈕邏輯 - 左側
         btnRecLeft.addEventListener('click', () => {
             isRecordingLeft = !isRecordingLeft;
-            btnRecLeft.textContent = isRecordingLeft ? '🔴 記錄中...' : '▶️ 開始測量';
+            btnRecLeft.textContent = isRecordingLeft ? '🔴 停止測量' : '▶️ 開始測量';
             btnRecLeft.classList.toggle('recording', isRecordingLeft);
             
-            // 互斥設計：一次只測量一邊
             if (isRecordingLeft) {
-                isRecordingRight = false;
-                btnRecRight.textContent = '▶️ 開始測量';
-                btnRecRight.classList.remove('recording');
+                // 開始測量
+                historyLeft = []; // 清空紀錄
+                valLeftDisplay.innerText = "測量中...";
+                valLeftDisplay.style.color = "#e74c3c";
+                // 清空圖表畫面讓新數據重新進入
+                chartLeft.data.datasets[0].data = Array(maxDataPoints).fill(1000);
+                chartLeft.update();
+
+                // 互斥：確保右邊停下
+                if (isRecordingRight) {
+                    isRecordingRight = false;
+                    btnRecRight.textContent = '▶️ 開始測量';
+                    btnRecRight.classList.remove('recording');
+                    valRightDisplay.innerText = calculateAmplitude(historyRight) + " mg";
+                    valRightDisplay.style.color = "#2c3e50";
+                }
+            } else {
+                // 停止測量，計算並顯示結果
+                let avg = calculateAmplitude(historyLeft);
+                valLeftDisplay.innerText = avg + " mg";
+                valLeftDisplay.style.color = "#2c3e50";
             }
         });
 
+        // 測量按鈕邏輯 - 右側
         btnRecRight.addEventListener('click', () => {
             isRecordingRight = !isRecordingRight;
-            btnRecRight.textContent = isRecordingRight ? '🔴 記錄中...' : '▶️ 開始測量';
+            btnRecRight.textContent = isRecordingRight ? '🔴 停止測量' : '▶️ 開始測量';
             btnRecRight.classList.toggle('recording', isRecordingRight);
             
-            // 互斥設計：一次只測量一邊
             if (isRecordingRight) {
-                isRecordingLeft = false;
-                btnRecLeft.textContent = '▶️ 開始測量';
-                btnRecLeft.classList.remove('recording');
+                // 開始測量
+                historyRight = []; // 清空紀錄
+                valRightDisplay.innerText = "測量中...";
+                valRightDisplay.style.color = "#e74c3c";
+                // 清空圖表畫面
+                chartRight.data.datasets[0].data = Array(maxDataPoints).fill(1000);
+                chartRight.update();
+
+                // 互斥：確保左邊停下
+                if (isRecordingLeft) {
+                    isRecordingLeft = false;
+                    btnRecLeft.textContent = '▶️ 開始測量';
+                    btnRecLeft.classList.remove('recording');
+                    valLeftDisplay.innerText = calculateAmplitude(historyLeft) + " mg";
+                    valLeftDisplay.style.color = "#2c3e50";
+                }
+            } else {
+                // 停止測量，計算並顯示結果
+                let avg = calculateAmplitude(historyRight);
+                valRightDisplay.innerText = avg + " mg";
+                valRightDisplay.style.color = "#2c3e50";
             }
         });
 
@@ -533,9 +606,6 @@ basic.forever(function () {
         // 強大的容錯字串解析，自動過濾並提取出數字
         function processLine(line) {
             if (!line) return;
-            
-            // 使用正則表達式把英文字母、冒號等雜訊清掉，只保留數字和負號、小數點
-            // 這樣不管 Micro:bit 傳 "x:1024" 或是純數字 "1024" 都能完美解析
             let rawStr = line.replace(/[^0-9.-]/g, '');
             let value = parseFloat(rawStr);
 
@@ -548,37 +618,41 @@ basic.forever(function () {
         let manualEarthquakeActive = false; 
         
         function updateCharts() {
-            if (!isSerialConnected) {
-                // 若未連接實體，且未開啟手動模擬，則維持靜止
-                if (!manualEarthquakeActive) return; 
-
-                // 網頁內部純前端模擬地震
-                let intensity = 600;
-                latestDataLeft = 1000 + (Math.random() - 0.5) * intensity; 
-                latestDataRight = 1000 + (Math.random() - 0.5) * intensity * 0.25; 
-            } else {
-                // 已連接 Micro:bit，根據按鈕狀態分派資料
-                if (isRecordingLeft) {
-                    latestDataLeft = currentSensorValue;
+            // -- 左側邏輯 --
+            if (isRecordingLeft || manualEarthquakeActive) {
+                if (!isSerialConnected && manualEarthquakeActive) {
+                    latestDataLeft = 1000 + (Math.random() - 0.5) * 600; // 模擬數據
                 } else {
-                    latestDataLeft = 1000; // 未按記錄時保持平穩
+                    latestDataLeft = currentSensorValue; // USB 真實數據
                 }
                 
-                if (isRecordingRight) {
-                    latestDataRight = currentSensorValue;
-                } else {
-                    latestDataRight = 1000; // 未按記錄時保持平穩
-                }
+                if (isRecordingLeft) historyLeft.push(latestDataLeft);
+
+                chartLeft.data.datasets[0].data.push(latestDataLeft);
+                chartLeft.data.datasets[0].data.shift(); 
+                chartLeft.update();
+            } else {
+                latestDataLeft = 1000; // 讓動畫平靜
+                // 不執行 chart.update()，讓圖表畫面「凍結」在停止測量的那一刻
             }
 
-            // 將新數據推入並更新圖表
-            chartLeft.data.datasets[0].data.push(latestDataLeft);
-            chartLeft.data.datasets[0].data.shift(); 
-            chartLeft.update();
+            // -- 右側邏輯 --
+            if (isRecordingRight || manualEarthquakeActive) {
+                if (!isSerialConnected && manualEarthquakeActive) {
+                    latestDataRight = 1000 + (Math.random() - 0.5) * 150; // 模擬數據
+                } else {
+                    latestDataRight = currentSensorValue; // USB 真實數據
+                }
 
-            chartRight.data.datasets[0].data.push(latestDataRight);
-            chartRight.data.datasets[0].data.shift(); 
-            chartRight.update();
+                if (isRecordingRight) historyRight.push(latestDataRight);
+
+                chartRight.data.datasets[0].data.push(latestDataRight);
+                chartRight.data.datasets[0].data.shift(); 
+                chartRight.update();
+            } else {
+                latestDataRight = 1000; // 讓動畫平靜
+                // 不執行 chart.update()，讓圖表畫面「凍結」
+            }
         }
 
         // 每 200ms 檢查並更新圖表
@@ -616,6 +690,8 @@ basic.forever(function () {
             btnRecLeft.classList.remove('recording');
             btnRecRight.textContent = '▶️ 開始測量';
             btnRecRight.classList.remove('recording');
+            valLeftDisplay.innerText = "-- mg";
+            valRightDisplay.innerText = "-- mg";
 
             Object.assign(stateLeft, createRoomState());
             Object.assign(stateRight, createRoomState());
