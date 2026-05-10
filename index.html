@@ -194,7 +194,7 @@
 <body>
 
     <header>
-        <h1>地震應變感測系統</h1>
+        <h1>地震應變感測系統 (USB 連線版)</h1>
     </header>
 
     <!-- 分頁導航 -->
@@ -206,8 +206,8 @@
     <!-- 第一頁：抗震避震系統 -->
     <div id="page1" class="page active">
         <div class="controls">
-            <button class="btn btn-connect" id="connectBtn">連接 Micro:bit</button>
-            <button class="btn btn-disconnect" id="disconnectBtn" disabled>斷開 Micro:bit</button>
+            <button class="btn btn-connect" id="connectBtn">連接 Micro:bit (USB)</button>
+            <button class="btn btn-disconnect" id="disconnectBtn" disabled>斷開連接</button>
             <span id="status">狀態：未連接 (顯示模擬數據)</span>
         </div>
 
@@ -251,25 +251,49 @@
     <!-- 第二頁：系統說明與設定 -->
     <div id="page2" class="page">
         <div class="chart-box">
-            <h2>系統說明與 Micro:bit 設定</h2>
+            <h2>系統說明與 Micro:bit USB 設定</h2>
             <div style="line-height: 1.8; color: #34495e;">
                 <h3>如何使用：</h3>
                 <ol>
-                    <li>將您的 Micro:bit 燒錄相對應的程式。</li>
-                    <li>點擊「連接 Micro:bit」按鈕。</li>
-                    <li>在彈出的視窗中選擇您的 Micro:bit 裝置進行配對。</li>
-                    <li>連接成功後，開啟您的震動平台，圖表將每 0.2 秒即時更新加速度數據，下方動畫也會根據真實強度運算傢俬傾倒的物理反應。</li>
+                    <li>將您的 Micro:bit 透過 <strong>USB 傳輸線</strong> 連接至電腦。</li>
+                    <li>點擊本網頁上方的「連接 Micro:bit (USB)」按鈕。</li>
+                    <li>在彈出的視窗中，選擇您的 Micro:bit 所在的 COM 埠（通常名稱會包含 <code>mbed Serial Port</code> 或 <code>BBC micro:bit CMSIS-DAP</code>），然後點選「連線」。</li>
+                    <li>連接成功後，開啟您的震動平台，即可即時接收數據。</li>
                 </ol>
                 
-                <h3>Micro:bit MakeCode 設定提示：</h3>
-                <ul>
-                    <li>需加入 <strong>Bluetooth</strong> 擴充功能。</li>
-                    <li>在「專案設定」中，必須開啟 <strong>「No Pairing Required: Anyone can connect via Bluetooth」</strong>。</li>
-                    <li>使用藍牙 UART 服務傳送數據，格式請設定為：<code>一般建築數值,隔震結構數值</code> （例如寫入字串 <code>1024,800</code>）。</li>
-                </ul>
+                <h3>Micro:bit MakeCode 程式寫法參考：</h3>
+                <p>請使用 <strong>序列埠 (Serial)</strong> 相關積木，不要用藍牙積木。Baud Rate 預設使用 <strong>115200</strong>。</p>
+                <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
+let testMode = 0
+
+// 初始化時可將序列埠導向 USB，Baud Rate 設定 115200
+serial.redirectToUSB()
+
+input.onButtonPressed(Button.A, function () {
+    testMode = 0
+    basic.showString("L")
+})
+
+input.onButtonPressed(Button.B, function () {
+    testMode = 1
+    basic.showString("R")
+})
+
+basic.forever(function () {
+    let accel = input.acceleration(Dimension.Strength)
+    
+    // 透過 USB 序列埠傳送數據，並記得加上換行符號
+    if (testMode == 0) {
+        serial.writeString(accel + ",1000\n")
+    } else {
+        serial.writeString("1000," + accel + "\n")
+    }
+    basic.pause(200)
+})
+                </pre>
                 
                 <p style="color: #e74c3c; font-weight: bold; margin-top: 20px;">
-                    ※ 注意：若要在預覽視窗連接藍牙，需確保瀏覽器支援 Web Bluetooth API，且由於安全性限制，建議下載 HTML 檔案後在本地端直接開啟網頁執行。
+                    ※ 注意：Web Serial API 必須使用 Google Chrome 或 Edge 瀏覽器。若在預覽視窗無法彈出連接畫面，請「下載」此 HTML 檔案並放在電腦上，建議透過本機伺服器 (Localhost) 或直接雙擊開啟來執行。
                 </p>
             </div>
         </div>
@@ -333,13 +357,15 @@
         const ctxRight = document.getElementById('chartRight').getContext('2d');
         const chartRight = new Chart(ctxRight, chartConfig('隔震結構數據', '#3498db'));
 
-        // --- 藍牙連線與數據處理 (Web Bluetooth API) ---
-        const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-        const UART_RX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-        let bluetoothDevice;
-        let rxCharacteristic;
+        // ==========================================
+        //       Web Serial API (USB 序列埠連線)
+        // ==========================================
+        let port;
+        let reader;
+        let keepReading = false;
         let receiveBuffer = "";
+        let isSerialConnected = false;
         
         // 最新數據 (基準值約 1000 mg)
         let latestDataLeft = 1000;
@@ -355,62 +381,85 @@
 
         async function connectMicrobit() {
             try {
-                if (!navigator.bluetooth) {
-                    alert('您的瀏覽器不支援 Web Bluetooth API。建議使用 Google Chrome 或 Edge 電腦版。');
+                if (!navigator.serial) {
+                    alert('您的瀏覽器不支援 Web Serial API。請確認您使用的是最新版的 Chrome 或 Edge 電腦版。');
                     return;
                 }
-                statusText.innerText = '狀態：正在搜尋裝置...';
                 
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'BBC micro:bit' }],
-                    optionalServices: [UART_SERVICE_UUID]
-                });
-
-                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-                statusText.innerText = '狀態：正在連接...';
-                const server = await bluetoothDevice.gatt.connect();
-                const service = await server.getPrimaryService(UART_SERVICE_UUID);
-                rxCharacteristic = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
+                statusText.innerText = '狀態：請選擇 Micro:bit 裝置...';
                 
-                await rxCharacteristic.startNotifications();
-                rxCharacteristic.addEventListener('characteristicvaluechanged', handleData);
+                // 請求使用者選擇 COM 埠
+                port = await navigator.serial.requestPort();
+                
+                // 開啟連接，Micro:bit 預設 Baud Rate 通常為 115200
+                await port.open({ baudRate: 115200 });
 
-                statusText.innerText = '狀態：已連接並接收數據中 🟢';
+                statusText.innerText = '狀態：已透過 USB 連接並接收數據中 🟢';
                 statusText.style.color = '#27ae60';
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
+                isSerialConnected = true;
+
+                keepReading = true;
+                readLoop();
 
             } catch (error) {
                 console.error(error);
                 statusText.innerText = '狀態：連接失敗或已取消';
                 statusText.style.color = '#e74c3c';
+                isSerialConnected = false;
             }
         }
 
-        function disconnectMicrobit() {
-            if (!bluetoothDevice) return;
-            if (bluetoothDevice.gatt.connected) {
-                bluetoothDevice.gatt.disconnect();
+        async function disconnectMicrobit() {
+            keepReading = false;
+            if (reader) {
+                await reader.cancel(); // 停止讀取
             }
-        }
-
-        function onDisconnected() {
+            if (port) {
+                await port.close(); // 關閉 COM 埠
+            }
+            
             statusText.innerText = '狀態：已斷開連接 🔴';
             statusText.style.color = '#7f8c8d';
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
+            isSerialConnected = false;
         }
 
-        function handleData(event) {
-            let value = new TextDecoder().decode(event.target.value);
-            receiveBuffer += value;
-            let lines = receiveBuffer.split('\n');
-            if (lines.length > 1) {
-                for (let i = 0; i < lines.length - 1; i++) {
-                    processLine(lines[i].trim());
+        // 讀取序列埠資料流
+        async function readLoop() {
+            while (port.readable && keepReading) {
+                const textDecoder = new TextDecoderStream();
+                const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+                reader = textDecoder.readable.getReader();
+
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            // 讀取器被取消時
+                            break;
+                        }
+                        if (value) {
+                            receiveBuffer += value;
+                            let lines = receiveBuffer.split('\n');
+                            
+                            // 確保處理完整的行
+                            if (lines.length > 1) {
+                                for (let i = 0; i < lines.length - 1; i++) {
+                                    processLine(lines[i].trim());
+                                }
+                                // 保留不完整的一行等待下一次資料
+                                receiveBuffer = lines[lines.length - 1];
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("序列埠讀取錯誤:", error);
+                } finally {
+                    reader.releaseLock();
                 }
-                receiveBuffer = lines[lines.length - 1];
             }
         }
 
@@ -433,19 +482,15 @@
         let manualEarthquakeActive = false; 
         
         function updateCharts() {
-            let isConnected = bluetoothDevice && bluetoothDevice.gatt.connected;
-
-            if (!isConnected) {
+            if (!isSerialConnected) {
                 if (!manualEarthquakeActive) {
-                    // 如果沒有連接藍牙，且未按下模擬地震按鈕，則不更新圖表（讓圖表靜止）
+                    // 如果沒有連接，且未按下模擬地震按鈕，則不更新圖表（讓圖表靜止）
                     return; 
                 }
 
                 // 模擬地震啟動中
                 let intensity = 600;
-                // 左邊模擬一般建築 (震動直接放大)
                 latestDataLeft = 1000 + (Math.random() - 0.5) * intensity; 
-                // 右邊模擬隔震建築 (震動被大幅吸收)
                 latestDataRight = 1000 + (Math.random() - 0.5) * intensity * 0.25; 
             }
 
@@ -467,12 +512,11 @@
         //       室內傢俬物理模擬動畫 (Canvas 2D)
         // ==========================================
         
-        // 建立獨立的房間物理狀態
         function createRoomState() {
             return {
                 lampAngle: 0, lampVel: 0,
                 wardrobeAngle: 0, wardrobeVel: 0,
-                tvAngle: 0, tvVel: 0, tvY: 125, // TV 預設放在 125 高度的桌上
+                tvAngle: 0, tvVel: 0, tvY: 125, 
                 tableX: 250,
                 chairX: 210
             };
@@ -481,7 +525,6 @@
         let stateLeft = createRoomState();
         let stateRight = createRoomState();
 
-        // 綁定模擬控制按鈕事件
         document.getElementById('simStartBtn').addEventListener('click', () => {
             manualEarthquakeActive = true;
         });
@@ -489,7 +532,6 @@
         document.getElementById('simStopBtn').addEventListener('click', () => {
             manualEarthquakeActive = false;
             
-            // 瞬間還原房間物理狀態
             Object.assign(stateLeft, createRoomState());
             Object.assign(stateRight, createRoomState());
             currentShakeLeft = 0;
@@ -497,89 +539,71 @@
             latestDataLeft = 1000;
             latestDataRight = 1000;
 
-            // 清空圖表資料，畫出一條筆直的水平線表示平靜
             chartLeft.data.datasets[0].data = Array(maxDataPoints).fill(1000);
             chartRight.data.datasets[0].data = Array(maxDataPoints).fill(1000);
             chartLeft.update();
             chartRight.update();
         });
         
-        // 為了讓動畫更平滑，我們把每 200ms 收到的數值做一個緩動插值
         let currentShakeLeft = 0;
         let currentShakeRight = 0;
 
-        // 計算物件的物理反饋
         function updateRoomPhysics(state, shake) {
-            // 1. 吊燈的單擺物理 (受震動搖晃)
             state.lampVel += (Math.random() - 0.5) * shake * 0.003 - state.lampAngle * 0.08 - state.lampVel * 0.05;
             state.lampAngle += state.lampVel;
 
-            // 2. 當震動強度超過閾值時，傢俬開始傾倒或移動
             if (shake > 15) {
-                // 震動越大，傢俬倒下(角速度增加)的速度越快
                 state.wardrobeVel += (shake * 0.00008) * (Math.random() + 0.5);
-                state.tvVel += (shake * 0.00015) * (Math.random() + 0.5); // TV 比較輕，倒得更快
-
-                // 桌椅會在地上滑動
+                state.tvVel += (shake * 0.00015) * (Math.random() + 0.5); 
                 state.tableX += (Math.random() - 0.5) * shake * 0.03;
                 state.chairX += (Math.random() - 0.5) * shake * 0.04;
-            } 
-            // 若地震停止(數值平靜)，讓場景慢慢恢復原狀以利重複展示
-            else if (shake < 5) {
+            } else if (shake < 5) {
                 state.wardrobeAngle *= 0.95;
                 state.tvAngle *= 0.95;
                 state.tvY += (125 - state.tvY) * 0.1;
                 state.tableX += (250 - state.tableX) * 0.05;
                 state.chairX += (210 - state.chairX) * 0.05;
-                
                 state.wardrobeVel *= 0.8;
                 state.tvVel *= 0.8;
             }
 
-            // --- 衣櫃的物理限制 ---
             state.wardrobeAngle += state.wardrobeVel;
-            state.wardrobeVel *= 0.85; // 摩擦力
+            state.wardrobeVel *= 0.85; 
             if (state.wardrobeAngle > Math.PI / 2) { 
-                state.wardrobeAngle = Math.PI / 2; // 倒在地板上
+                state.wardrobeAngle = Math.PI / 2; 
                 state.wardrobeVel = 0;
             }
             if (state.wardrobeAngle < 0) { state.wardrobeAngle = 0; state.wardrobeVel = 0; }
 
-            // --- 電視的物理限制 ---
             state.tvAngle += state.tvVel;
             state.tvVel *= 0.85; 
             if (state.tvAngle >= Math.PI / 2) {
-                state.tvAngle = Math.PI / 2; // 電視倒下
+                state.tvAngle = Math.PI / 2; 
                 state.tvVel = 0;
-                if (state.tvY < 160) state.tvY += 8; // 從桌上掉落到地板(Y=160)
+                if (state.tvY < 160) state.tvY += 8; 
             }
             if (state.tvAngle < 0) { state.tvAngle = 0; state.tvVel = 0; }
 
-            // --- 桌椅滑動的邊界限制 ---
             if (state.tableX < 150) state.tableX = 150;
             if (state.tableX > 320) state.tableX = 320;
             if (state.chairX < 80) state.chairX = 80;
             if (state.chairX > state.tableX - 20) state.chairX = state.tableX - 20;
         }
 
-        // 繪製單一房間
         function drawRoom(ctx, state, shake) {
             ctx.clearRect(0, 0, 400, 180);
 
-            // 整個房間的劇烈震動效果 (跟隨 shake 強度)
             let rX = (Math.random() - 0.5) * shake * 0.01;
             let rY = (Math.random() - 0.5) * shake * 0.01;
 
             ctx.save();
             ctx.translate(rX, rY);
 
-            // 牆壁與地板
             ctx.fillStyle = '#9E9E9E';
-            ctx.fillRect(0, 160, 400, 20); // 地板
+            ctx.fillRect(0, 160, 400, 20); 
             ctx.fillStyle = '#BDBDBD';
-            ctx.fillRect(0, 0, 15, 180); // 左側牆壁
+            ctx.fillRect(0, 0, 15, 180); 
 
-            // 背景窗戶 (增加深度感)
             ctx.fillStyle = '#BBDEFB';
             ctx.fillRect(80, 30, 80, 60);
             ctx.strokeStyle = '#FFFFFF';
@@ -588,63 +612,57 @@
             ctx.beginPath(); ctx.moveTo(120, 30); ctx.lineTo(120, 90); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(80, 60); ctx.lineTo(160, 60); ctx.stroke();
 
-            // 1. 天花板吊燈
             ctx.save();
             ctx.translate(200, 0);
             ctx.rotate(state.lampAngle);
             ctx.strokeStyle = '#424242';
             ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 35); ctx.stroke();
-            ctx.fillStyle = '#FFEE58'; // 燈泡
+            ctx.fillStyle = '#FFEE58'; 
             ctx.beginPath(); ctx.arc(0, 35, 6, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#757575'; // 燈罩
+            ctx.fillStyle = '#757575'; 
             ctx.beginPath(); ctx.moveTo(-12, 35); ctx.lineTo(12, 35); ctx.lineTo(5, 20); ctx.lineTo(-5, 20); ctx.fill();
             ctx.restore();
 
-            // 2. 衣櫃 (以右下角為旋轉軸心，模擬向右傾倒)
             ctx.save();
             let w_width = 45, w_height = 110;
             ctx.translate(25 + w_width, 160); 
             ctx.rotate(state.wardrobeAngle);
-            ctx.fillStyle = '#5D4037'; // 深木色
+            ctx.fillStyle = '#5D4037'; 
             ctx.fillRect(-w_width, -w_height, w_width, w_height);
-            ctx.fillStyle = '#4E342E'; // 門板裝飾
+            ctx.fillStyle = '#4E342E'; 
             ctx.fillRect(-w_width+4, -w_height+4, w_width/2-6, w_height-8);
             ctx.fillRect(-w_width/2+2, -w_height+4, w_width/2-6, w_height-8);
-            ctx.fillStyle = '#D7CCC8'; // 把手
+            ctx.fillStyle = '#D7CCC8'; 
             ctx.fillRect(-w_width/2-4, -w_height/2, 2, 12);
             ctx.fillRect(-w_width/2+4, -w_height/2, 2, 12);
             ctx.restore();
 
-            // 3. 桌子
             ctx.fillStyle = '#8D6E63';
-            ctx.fillRect(state.tableX, 125, 80, 6); // 桌面
-            ctx.fillRect(state.tableX + 6, 131, 6, 29); // 左腳
-            ctx.fillRect(state.tableX + 68, 131, 6, 29); // 右腳
+            ctx.fillRect(state.tableX, 125, 80, 6); 
+            ctx.fillRect(state.tableX + 6, 131, 6, 29); 
+            ctx.fillRect(state.tableX + 68, 131, 6, 29); 
 
-            // 4. 椅子
             ctx.fillStyle = '#A1887F';
-            ctx.fillRect(state.chairX, 140, 26, 5); // 椅墊
-            ctx.fillRect(state.chairX + 4, 145, 4, 15); // 前腳
-            ctx.fillRect(state.chairX + 18, 145, 4, 15); // 後腳
-            ctx.fillRect(state.chairX, 115, 4, 25); // 椅背
+            ctx.fillRect(state.chairX, 140, 26, 5); 
+            ctx.fillRect(state.chairX + 4, 145, 4, 15); 
+            ctx.fillRect(state.chairX + 18, 145, 4, 15); 
+            ctx.fillRect(state.chairX, 115, 4, 25); 
 
-            // 5. 電視機 (放在桌上右側，向右倒下)
             ctx.save();
-            ctx.translate(state.tableX + 65, state.tvY); // 旋轉軸心在右下角
+            ctx.translate(state.tableX + 65, state.tvY); 
             ctx.rotate(state.tvAngle);
-            ctx.fillStyle = '#212121'; // 機身
+            ctx.fillStyle = '#212121'; 
             ctx.fillRect(-45, -35, 45, 30);
-            ctx.fillStyle = '#424242'; // 螢幕
+            ctx.fillStyle = '#424242'; 
             ctx.fillRect(-42, -32, 39, 24);
-            // 只有電視還沒完全倒下時，才畫出底座
             if (state.tvAngle < Math.PI/4) {
                  ctx.fillStyle = '#757575';
                  ctx.fillRect(-28, -5, 10, 5); 
             }
             ctx.restore();
 
-            ctx.restore(); // 結束整個房間的震動 translate
+            ctx.restore(); 
         }
 
         const canvasL = document.getElementById('animLeft');
@@ -652,28 +670,22 @@
         const ctxAnimL = canvasL.getContext('2d');
         const ctxAnimR = canvasR.getContext('2d');
 
-        // 動畫循環 (每秒 60 幀平滑更新)
         function renderAnimationLoop() {
-            // 從原始數據 (約1000mg) 計算出震動強度絕對值
             let targetShakeL = Math.abs(latestDataLeft - 1000);
             let targetShakeR = Math.abs(latestDataRight - 1000);
 
-            // 數值平滑處理 (避免動畫瞬間跳動)
             currentShakeLeft += (targetShakeL - currentShakeLeft) * 0.2;
             currentShakeRight += (targetShakeR - currentShakeRight) * 0.2;
 
-            // 更新物理狀態
             updateRoomPhysics(stateLeft, currentShakeLeft);
             updateRoomPhysics(stateRight, currentShakeRight);
 
-            // 渲染畫面
             drawRoom(ctxAnimL, stateLeft, currentShakeLeft);
             drawRoom(ctxAnimR, stateRight, currentShakeRight);
             
             requestAnimationFrame(renderAnimationLoop);
         }
         
-        // 啟動動畫引擎
         renderAnimationLoop();
 
     </script>
