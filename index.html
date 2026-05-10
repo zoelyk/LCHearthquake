@@ -130,14 +130,46 @@
             display: flex;
             flex-direction: column;
         }
-        h2 { 
-            text-align: center; 
-            color: var(--primary-color);
-            margin-top: 0;
-            margin-bottom: 10px;
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
         }
+        .chart-header h2 { 
+            margin: 0;
+            color: var(--primary-color);
+        }
+        
+        /* 紀錄按鈕樣式 */
+        .record-btn {
+            font-size: 14px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 2px solid #bdc3c7;
+            background: white;
+            color: #7f8c8d;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .record-btn:hover {
+            border-color: #3498db;
+            color: #3498db;
+        }
+        .record-btn.recording {
+            background: #e74c3c;
+            color: white;
+            border-color: #e74c3c;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+
         .description {
-            text-align: center;
             color: #7f8c8d;
             margin-bottom: 20px;
             font-size: 14px;
@@ -214,7 +246,10 @@
         <div class="charts-container">
             <!-- 左邊圖表：一般建築物 -->
             <div class="chart-box">
-                <h2>一般建築物測試</h2>
+                <div class="chart-header">
+                    <h2>一般建築物測試</h2>
+                    <button id="btnRecLeft" class="record-btn">▶️ 開始測量</button>
+                </div>
                 <div class="description">模擬一般建築物，無隔震裝置<br>直接放置於震動平台上</div>
                 <div class="chart-wrapper">
                     <canvas id="chartLeft"></canvas>
@@ -228,7 +263,10 @@
 
             <!-- 右邊圖表：隔震結構 -->
             <div class="chart-box">
-                <h2>隔震結構測試</h2>
+                <div class="chart-header">
+                    <h2>隔震結構測試</h2>
+                    <button id="btnRecRight" class="record-btn">▶️ 開始測量</button>
+                </div>
                 <div class="description">模擬隔震建築物<br>裝有彈性與可動支撐的隔震結構</div>
                 <div class="chart-wrapper">
                     <canvas id="chartRight"></canvas>
@@ -242,8 +280,8 @@
 
             <!-- 模擬控制按鈕 -->
             <div class="simulation-controls">
-                <button class="btn btn-warning" id="simStartBtn">模擬地震</button>
-                <button class="btn btn-secondary" id="simStopBtn">停止模擬及還原</button>
+                <button class="btn btn-warning" id="simStartBtn">網頁內部模擬地震</button>
+                <button class="btn btn-secondary" id="simStopBtn">停止並還原場景</button>
             </div>
         </div>
     </div>
@@ -256,46 +294,31 @@
                 <h3>如何使用：</h3>
                 <ol>
                     <li>將您的 Micro:bit 透過 <strong>USB 傳輸線</strong> 連接至電腦。</li>
-                    <li>點擊本網頁上方的「連接 Micro:bit (USB)」按鈕。</li>
-                    <li>在彈出的視窗中，選擇您的 Micro:bit 所在的 COM 埠（通常名稱會包含 <code>mbed Serial Port</code> 或 <code>BBC micro:bit CMSIS-DAP</code>），然後點選「連線」。</li>
-                    <li>連接成功後，開啟您的震動平台，即可即時接收數據。</li>
+                    <li>點擊本網頁上方的「連接 Micro:bit (USB)」按鈕，選擇對應的 COM 埠。</li>
+                    <li>連接成功後，Micro:bit 就會不斷向網頁傳送數據。</li>
+                    <li>點選圖表標題旁邊的 <strong>「▶️ 開始測量」</strong> 按鈕，系統就會將接收到的數據導入該圖表與動畫中。</li>
+                    <li>測試完一般建築物後，點選停止，再換點選隔震結構的「開始測量」繼續測試。</li>
                 </ol>
                 
-                <h3>Micro:bit MakeCode 程式寫法參考：</h3>
-                <p>請使用 <strong>序列埠 (Serial)</strong> 相關積木，不要用藍牙積木。Baud Rate 預設使用 <strong>115200</strong>。</p>
-                <p><strong>注意：</strong>為了讓網頁能區分左右側數據，請參考下方新的程式寫法，按下 A 鍵傳送「L,數值」，按下 B 鍵傳送「R,數值」。</p>
+                <h3>Micro:bit MakeCode 極簡版程式寫法：</h3>
+                <p>現在網頁具有超強容錯力，Micro:bit <strong>只需要單純地寫入強度數值</strong> 即可，網頁上的按鈕會負責決定資料要送到哪裡！</p>
                 <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
-let testMode = 0
-
-// 初始化時可將序列埠導向 USB，Baud Rate 設定 115200
+// 1. 在「當啟動時」設定 USB 序列埠
 serial.redirectToUSB()
 
-input.onButtonPressed(Button.A, function () {
-    testMode = 0
-    basic.showString("L") // 顯示 L 代表測試左側
-})
-
-input.onButtonPressed(Button.B, function () {
-    testMode = 1
-    basic.showString("R") // 顯示 R 代表測試右側
-})
-
+// 2. 在「重複無限次」中，直接把加速度數值寫成一行傳出去
 basic.forever(function () {
     let accel = input.acceleration(Dimension.Strength)
     
-    // 透過 USB 序列埠傳送數據，並記得加上換行符號
-    // 使用 "L,數值" 或 "R,數值" 的格式來區分
-    if (testMode == 0) {
-        serial.writeString("L," + accel + "\n")
-    } else {
-        serial.writeString("R," + accel + "\n")
-    }
+    // 只要這一行！網頁會自動過濾並接收數字
+    serial.writeLine("" + accel)
+    
     basic.pause(200)
 })
                 </pre>
                 
                 <p style="color: #e74c3c; font-weight: bold; margin-top: 20px;">
-                    ※ 注意：Web Serial API 必須使用 Google Chrome 或 Edge 瀏覽器。若在預覽視窗無法彈出連接畫面，請「下載」此 HTML 檔案並放在電腦上，建議透過本機伺服器 (Localhost) 或直接雙擊開啟來執行。
+                    ※ 注意：Web Serial API 必須使用 Google Chrome 或 Edge 瀏覽器。若在預覽視窗無法彈出連接畫面，請「下載」此 HTML 檔案並放在電腦上，直接雙擊開啟即可。
                 </p>
             </div>
         </div>
@@ -369,15 +392,54 @@ basic.forever(function () {
         let receiveBuffer = "";
         let isSerialConnected = false;
         
-        // 最新數據 (基準值約 1000 mg)
+        // 最新收到的感測器原始數據 (基準值約 1000 mg)
+        let currentSensorValue = 1000;
+        
+        // 圖表顯示用的數據
         let latestDataLeft = 1000;
         let latestDataRight = 1000;
         let chartUpdateInterval;
 
+        // 測量狀態控制變數
+        let isRecordingLeft = false;
+        let isRecordingRight = false;
+
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
+        
+        const btnRecLeft = document.getElementById('btnRecLeft');
+        const btnRecRight = document.getElementById('btnRecRight');
 
+        // 測量按鈕邏輯
+        btnRecLeft.addEventListener('click', () => {
+            isRecordingLeft = !isRecordingLeft;
+            btnRecLeft.textContent = isRecordingLeft ? '🔴 記錄中...' : '▶️ 開始測量';
+            btnRecLeft.classList.toggle('recording', isRecordingLeft);
+            
+            // 互斥設計：一次只測量一邊
+            if (isRecordingLeft) {
+                isRecordingRight = false;
+                btnRecRight.textContent = '▶️ 開始測量';
+                btnRecRight.classList.remove('recording');
+            }
+        });
+
+        btnRecRight.addEventListener('click', () => {
+            isRecordingRight = !isRecordingRight;
+            btnRecRight.textContent = isRecordingRight ? '🔴 記錄中...' : '▶️ 開始測量';
+            btnRecRight.classList.toggle('recording', isRecordingRight);
+            
+            // 互斥設計：一次只測量一邊
+            if (isRecordingRight) {
+                isRecordingLeft = false;
+                btnRecLeft.textContent = '▶️ 開始測量';
+                btnRecLeft.classList.remove('recording');
+            }
+        });
+
+
+        // USB 連接邏輯
         connectBtn.addEventListener('click', connectMicrobit);
         disconnectBtn.addEventListener('click', disconnectMicrobit);
 
@@ -390,13 +452,10 @@ basic.forever(function () {
                 
                 statusText.innerText = '狀態：請選擇 Micro:bit 裝置...';
                 
-                // 請求使用者選擇 COM 埠
                 port = await navigator.serial.requestPort();
-                
-                // 開啟連接，Micro:bit 預設 Baud Rate 通常為 115200
                 await port.open({ baudRate: 115200 });
 
-                statusText.innerText = '狀態：已透過 USB 連接並接收數據中 🟢';
+                statusText.innerText = '狀態：已連線 🟢 (請點選下方圖表的開始測量)';
                 statusText.style.color = '#27ae60';
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
@@ -422,10 +481,10 @@ basic.forever(function () {
             
             try {
                 if (reader) {
-                    await reader.cancel(); // 停止讀取
+                    await reader.cancel(); 
                 }
                 if (port) {
-                    await port.close(); // 關閉 COM 埠
+                    await port.close(); 
                 }
                 statusText.innerText = '狀態：已斷開連接 🔴';
                 statusText.style.color = '#7f8c8d';
@@ -442,9 +501,8 @@ basic.forever(function () {
             }
         }
 
-        // 讀取序列埠資料流
         async function readLoop() {
-            while (port.readable && keepReading) {
+            while (port && port.readable && keepReading) {
                 const textDecoder = new TextDecoderStream();
                 const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
                 reader = textDecoder.readable.getReader();
@@ -452,20 +510,14 @@ basic.forever(function () {
                 try {
                     while (true) {
                         const { value, done } = await reader.read();
-                        if (done) {
-                            // 讀取器被取消時
-                            break;
-                        }
+                        if (done) break;
                         if (value) {
                             receiveBuffer += value;
                             let lines = receiveBuffer.split('\n');
-                            
-                            // 確保處理完整的行
                             if (lines.length > 1) {
                                 for (let i = 0; i < lines.length - 1; i++) {
                                     processLine(lines[i].trim());
                                 }
-                                // 保留不完整的一行等待下一次資料
                                 receiveBuffer = lines[lines.length - 1];
                             }
                         }
@@ -478,24 +530,17 @@ basic.forever(function () {
             }
         }
 
+        // 強大的容錯字串解析，自動過濾並提取出數字
         function processLine(line) {
             if (!line) return;
-            let parts = line.split(',');
             
-            // 新的格式：模式(L/R),數值
-            if (parts.length >= 2) {
-                let mode = parts[0].trim().toUpperCase();
-                let value = parseFloat(parts[1]);
+            // 使用正則表達式把英文字母、冒號等雜訊清掉，只保留數字和負號、小數點
+            // 這樣不管 Micro:bit 傳 "x:1024" 或是純數字 "1024" 都能完美解析
+            let rawStr = line.replace(/[^0-9.-]/g, '');
+            let value = parseFloat(rawStr);
 
-                if (!isNaN(value)) {
-                    if (mode === 'L') {
-                        latestDataLeft = value;
-                        latestDataRight = 1000; // 右邊設為平靜
-                    } else if (mode === 'R') {
-                        latestDataRight = value;
-                        latestDataLeft = 1000; // 左邊設為平靜
-                    }
-                }
+            if (!isNaN(value)) {
+                currentSensorValue = value;
             }
         }
 
@@ -504,15 +549,26 @@ basic.forever(function () {
         
         function updateCharts() {
             if (!isSerialConnected) {
-                if (!manualEarthquakeActive) {
-                    // 如果沒有連接，且未按下模擬地震按鈕，則不更新圖表（讓圖表靜止）
-                    return; 
-                }
+                // 若未連接實體，且未開啟手動模擬，則維持靜止
+                if (!manualEarthquakeActive) return; 
 
-                // 模擬地震啟動中
+                // 網頁內部純前端模擬地震
                 let intensity = 600;
                 latestDataLeft = 1000 + (Math.random() - 0.5) * intensity; 
                 latestDataRight = 1000 + (Math.random() - 0.5) * intensity * 0.25; 
+            } else {
+                // 已連接 Micro:bit，根據按鈕狀態分派資料
+                if (isRecordingLeft) {
+                    latestDataLeft = currentSensorValue;
+                } else {
+                    latestDataLeft = 1000; // 未按記錄時保持平穩
+                }
+                
+                if (isRecordingRight) {
+                    latestDataRight = currentSensorValue;
+                } else {
+                    latestDataRight = 1000; // 未按記錄時保持平穩
+                }
             }
 
             // 將新數據推入並更新圖表
@@ -553,6 +609,14 @@ basic.forever(function () {
         document.getElementById('simStopBtn').addEventListener('click', () => {
             manualEarthquakeActive = false;
             
+            // 如果這時正開啟收錄實體數據，順便把它關掉
+            isRecordingLeft = false;
+            isRecordingRight = false;
+            btnRecLeft.textContent = '▶️ 開始測量';
+            btnRecLeft.classList.remove('recording');
+            btnRecRight.textContent = '▶️ 開始測量';
+            btnRecRight.classList.remove('recording');
+
             Object.assign(stateLeft, createRoomState());
             Object.assign(stateRight, createRoomState());
             currentShakeLeft = 0;
